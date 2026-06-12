@@ -1,0 +1,42 @@
+name: Sonosaur
+options:
+  bundleIdPrefix: com.mjball
+  deploymentTarget:
+    macOS: "13.0"
+  xcodeVersion: "16"
+  createIntermediateGroups: true
+
+targets:
+  Sonosaur:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Sonosaur
+    entitlements:
+      path: Sonosaur/Sonosaur.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mjball.Sonosaur
+        PRODUCT_NAME: Sonosaur
+        SWIFT_VERSION: 5.9
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        INFOPLIST_FILE: Sonosaur/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        # Menu bar agent — no Dock icon
+        LSUIElement: YES
+    info:
+      path: Sonosaur/Info.plist
+      properties:
+        CFBundleName: Sonosaur
+        CFBundleDisplayName: Sonosaur
+        CFBundleIdentifier: com.mjball.Sonosaur
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "0.1.0"
+        LSUIElement: true
+        NSLocalNetworkUsageDescription: >
+          Sonosaur scans your local network to find Sonos speakers and control
+          their volume directly — no internet connection required.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true

@@ -1,0 +1,22 @@
+# Xcode build artifacts
+build/
+DerivedData/
+*.xcuserstate
+*.xcbkptlist
+xcuserdata/
+*.xcscheme
+
+# macOS noise
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+
+# SPM (in case someone tries swift build)
+.build/
+.swiftpm/
+
+# Secrets / credentials
+*.p12
+*.mobileprovision
