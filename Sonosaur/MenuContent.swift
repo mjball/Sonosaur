@@ -14,12 +14,8 @@ struct MenuContent: View {
         }
         .frame(width: 280)
         .padding(12)
-        .task {
-            // Refresh once when the popover first opens.
-            if controller.devices.isEmpty && !controller.isLoading {
-                await controller.refresh()
-            }
-        }
+        // No .task here — SonosController starts discovery at init,
+        // so devices are populated before the popover opens.
     }
 
     // MARK: - Subviews
