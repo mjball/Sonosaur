@@ -7,7 +7,7 @@
 #
 # Distribution strategy (same as mid-clock):
 #   - App is unsigned; users strip quarantine with:  xattr -cr /Applications/Sonosaur.app
-#   - Released as Sonosaur.app.tar.gz via GitHub Releases on mjball/Sonosaur
+#   - Released as Sonosaur.app.zip via GitHub Releases on mjball/Sonosaur
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-ARCHIVE="$REPO_ROOT/Sonosaur.app.tar.gz"
+ARCHIVE="$REPO_ROOT/Sonosaur.app.zip"
 APP_BUILD_DIR="$REPO_ROOT/build"
 APP_PATH="$APP_BUILD_DIR/Sonosaur.app"
 
@@ -58,7 +58,7 @@ fi
 
 echo "==> Packaging"
 cd "$APP_BUILD_DIR"
-tar czf "$ARCHIVE" Sonosaur.app
+zip -qr "$ARCHIVE" Sonosaur.app
 echo "    Created: $ARCHIVE ($(du -sh "$ARCHIVE" | cut -f1))"
 
 if [[ -n "$RELEASE_VERSION" ]]; then
@@ -69,16 +69,14 @@ if [[ -n "$RELEASE_VERSION" ]]; then
     --notes "$(cat <<EOF
 ## Install
 
-\`\`\`bash
-gh release download $RELEASE_VERSION -R mjball/Sonosaur \\
-  --pattern 'Sonosaur.app.tar.gz' -O - | \\
-  tar -xf - -C /Applications && \\
-  xattr -cr /Applications/Sonosaur.app && \\
-  open /Applications/Sonosaur.app
-\`\`\`
+Download \`Sonosaur.app.zip\` from the assets below, double-click to extract, and drag \`Sonosaur.app\` to \`/Applications\`.
 
-Or download \`Sonosaur.app.tar.gz\` from the assets below, extract, and drag to /Applications.
-macOS will quarantine the unsigned app — remove it with \`xattr -cr /Applications/Sonosaur.app\`.
+Then remove the macOS quarantine flag (required for unsigned apps):
+
+\`\`\`bash
+xattr -cr /Applications/Sonosaur.app
+open /Applications/Sonosaur.app
+\`\`\`
 EOF
     )"
   echo "==> Released: https://github.com/mjball/Sonosaur/releases/tag/$RELEASE_VERSION"

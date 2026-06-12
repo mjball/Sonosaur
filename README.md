@@ -10,18 +10,13 @@ Click the dino icon in your menu bar → see every Sonos room with a live volume
 
 ## Install
 
-```bash
-gh release download -R mjball/Sonosaur \
-  --pattern 'Sonosaur.app.tar.gz' -O - | \
-  tar -xf - -C /Applications && \
-  xattr -cr /Applications/Sonosaur.app && \
-  open /Applications/Sonosaur.app
-```
+Download `Sonosaur.app.zip` from [Releases](https://github.com/mjball/Sonosaur/releases), double-click to extract, and drag `Sonosaur.app` to `/Applications`.
 
-Or download `Sonosaur.app.tar.gz` from [Releases](https://github.com/mjball/Sonosaur/releases), extract, drag to `/Applications`, then:
+Then remove the macOS quarantine flag (required for unsigned apps):
 
 ```bash
 xattr -cr /Applications/Sonosaur.app
+open /Applications/Sonosaur.app
 ```
 
 > macOS quarantines apps downloaded from the internet that aren't notarized. `xattr -cr` removes that quarantine flag.
