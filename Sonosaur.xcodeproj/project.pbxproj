@@ -10,6 +10,7 @@
 		2CC88C859172D377D41F756A /* SonosaurApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0005D7C667C74224EB396FA6 /* SonosaurApp.swift */; };
 		41936C95D7A2D68AB2DFD897 /* SonosController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030FAB792DA8774E1793B96B /* SonosController.swift */; };
 		4274120099C1D9F3E266C211 /* DeviceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7589336C0C3AD7384C058449 /* DeviceRow.swift */; };
+		5490B1BE1FA0B9AD80984EB8 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00829F8E8E5FFA638CCCF429 /* LaunchAtLogin.swift */; };
 		5D1A6CC12C4F9E0798D232F5 /* MenuContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8503DFD36B20261351D9D9AF /* MenuContent.swift */; };
 		621D0E9E0FABD8B5DA742CE9 /* SonosDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0686E2AC1FC5D31CEB37AE /* SonosDevice.swift */; };
 		6F621E5AD1C59A892479C8AE /* Discovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F502845C1F37149481D38C /* Discovery.swift */; };
@@ -19,6 +20,7 @@
 
 /* Begin PBXFileReference section */
 		0005D7C667C74224EB396FA6 /* SonosaurApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonosaurApp.swift; sourceTree = "<group>"; };
+		00829F8E8E5FFA638CCCF429 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
 		030FAB792DA8774E1793B96B /* SonosController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonosController.swift; sourceTree = "<group>"; };
 		43F502845C1F37149481D38C /* Discovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Discovery.swift; sourceTree = "<group>"; };
 		45D615FACC51EEC41B4C72AE /* SoapClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoapClient.swift; sourceTree = "<group>"; };
@@ -39,6 +41,7 @@
 				7589336C0C3AD7384C058449 /* DeviceRow.swift */,
 				43F502845C1F37149481D38C /* Discovery.swift */,
 				4EEF69672FEEA6EAF9ED1E2C /* Info.plist */,
+				00829F8E8E5FFA638CCCF429 /* LaunchAtLogin.swift */,
 				8503DFD36B20261351D9D9AF /* MenuContent.swift */,
 				45D615FACC51EEC41B4C72AE /* SoapClient.swift */,
 				AE14459EE60C8D3C67397D1C /* Sonosaur.entitlements */,
@@ -138,6 +141,7 @@
 			files = (
 				4274120099C1D9F3E266C211 /* DeviceRow.swift in Sources */,
 				6F621E5AD1C59A892479C8AE /* Discovery.swift in Sources */,
+				5490B1BE1FA0B9AD80984EB8 /* LaunchAtLogin.swift in Sources */,
 				5D1A6CC12C4F9E0798D232F5 /* MenuContent.swift in Sources */,
 				BE67372835A572C1779109C2 /* SoapClient.swift in Sources */,
 				41936C95D7A2D68AB2DFD897 /* SonosController.swift in Sources */,

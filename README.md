@@ -6,46 +6,52 @@ A native macOS menu bar app that shows one volume slider per Sonos device on you
 
 ## What it does
 
-Click the speaker icon in your menu bar → see every Sonos room with a live volume slider. Drag a slider → that speaker changes volume within ~1 second. Works over your LAN directly via the Sonos UPnP/SOAP interface on port 1400 — nothing leaves your home network.
+Click the dino icon in your menu bar → see every Sonos room with a live volume slider. Drag a slider → that speaker changes volume within ~1 second. Works over your LAN directly via the Sonos UPnP/SOAP interface on port 1400 — nothing leaves your home network.
+
+## Install
+
+```bash
+gh release download -R mjball/Sonosaur \
+  --pattern 'Sonosaur.app.tar.gz' -O - | \
+  tar -xf - -C /Applications && \
+  xattr -cr /Applications/Sonosaur.app && \
+  open /Applications/Sonosaur.app
+```
+
+Or download `Sonosaur.app.tar.gz` from [Releases](https://github.com/mjball/Sonosaur/releases), extract, drag to `/Applications`, then:
+
+```bash
+xattr -cr /Applications/Sonosaur.app
+```
+
+> macOS quarantines apps downloaded from the internet that aren't notarized. `xattr -cr` removes that quarantine flag.
 
 ## Requirements
 
 - macOS 13.0+
-- Xcode 15+ (to build)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - Sonos players on the same LAN subnet
 
-## Build & run
+## How it works
+
+- **Discovery**: reads the kernel ARP table (`arp -a`) to get all recently-seen LAN hosts, fires `ZoneGroupTopology` at them concurrently — finds and enumerates the whole household in one round trip. Caches IPs in `UserDefaults` so relaunch is instant.
+- **No SSDP**: avoids multicast (requires an Apple provisioning entitlement). Pure unicast.
+- **Volume control**: `RenderingControl#SetVolume` SOAP call to port 1400 on each device, debounced during slider drags.
+- **Background refresh**: re-discovers devices every 5 minutes silently.
+- **Launch at login**: toggle in the footer of the popover.
+
+## Build from source
+
+Requires Xcode 15+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```bash
 xcodegen generate
-open Sonosaur.xcodeproj
-# Press ⌘R in Xcode
+open Sonosaur.xcodeproj   # ⌘R to run
 ```
 
-Or from the command line:
+## Release
 
 ```bash
-xcodegen generate
-xcodebuild -project Sonosaur.xcodeproj -scheme Sonosaur -configuration Debug build
+./Scripts/build-release.sh --release v0.2.0
 ```
 
-On first launch, macOS will ask for **Local Network** access — approve it so Sonosaur can find your speakers.
-
-## How discovery works
-
-No SSDP multicast (that requires an Apple provisioning entitlement). Instead:
-
-1. Load cached player IPs from `UserDefaults`.
-2. If any are reachable, ask one for the full household via `ZoneGroupTopology`.
-3. If nothing cached, TCP-scan the local `/24` on port 1400 (concurrency-limited, 1-second timeout per host), then enumerate via topology.
-4. Cache the discovered IPs for instant relaunch next time.
-
-## Roadmap / not-yet-done
-
-- [ ] Per-device mute toggle
-- [ ] Now playing display
-- [ ] Group/zone volume
-- [ ] Launch at login
-- [ ] Notarization / proper distribution
-- [ ] Custom 🦕 app icon
+Builds a Release `.app`, packages it as `Sonosaur.app.tar.gz`, and publishes to GitHub Releases. The app is unsigned — see install instructions above for the `xattr` step.

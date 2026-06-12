@@ -3,6 +3,7 @@ import SwiftUI
 /// The content of the menu bar popover: device list, status, refresh, quit.
 struct MenuContent: View {
     @ObservedObject var controller: SonosController
+    @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -67,6 +68,13 @@ struct MenuContent: View {
                 Task { await controller.refresh() }
             }
             .disabled(controller.isLoading)
+
+            Spacer()
+
+            Toggle("Launch at login", isOn: $launchAtLogin.isEnabled)
+                .toggleStyle(.checkbox)
+                .font(.subheadline)
+                .help("Start Sonosaur automatically when you log in")
 
             Spacer()
 
