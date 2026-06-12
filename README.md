@@ -8,6 +8,8 @@ A native macOS menu bar app that shows one volume slider per Sonos device on you
 
 Click the dino icon in your menu bar → see every Sonos room with a live volume slider. Drag a slider → that speaker changes volume within ~1 second. Works over your LAN directly via the Sonos UPnP/SOAP interface on port 1400 — nothing leaves your home network.
 
+![Sonosaur screenshot](screenshot.png)
+
 ## Install
 
 ```bash
