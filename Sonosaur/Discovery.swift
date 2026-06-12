@@ -156,6 +156,7 @@ enum Discovery {
                   let location = xmlAttr("Location", from: attrs),
                   let roomName = xmlAttr("ZoneName", from: attrs),
                   let host = URL(string: location)?.host,
+                  xmlAttr("Invisible", from: attrs) != "1",  // skip bonded satellites/surrounds/subs
                   !seen.contains(uuid)
             else { continue }
             seen.insert(uuid)
