@@ -48,8 +48,7 @@ enum Discovery {
     private static func shouldScan(_ subnet: Subnet, knownHosts: [String], trigger: Trigger) -> Bool {
         let isHome = knownHosts.contains(where: subnet.contains)
         switch trigger {
-        case .userRefresh: return true
-        case .launch: return isHome || knownHosts.isEmpty
+        case .launch, .userRefresh: return isHome || knownHosts.isEmpty
         case .background: return isHome
         }
     }
