@@ -1,4 +1,4 @@
-import Darwin
+import Foundation
 
 extension Discovery {
 
@@ -11,6 +11,10 @@ extension Discovery {
         return routes.first { $0.destinationIP == gateway && $0.gatewayMAC != nil }?.gatewayMAC
     }
 
+    static func arpTableIPs() -> [UInt32] {
+        ipv4Routes().filter { $0.gatewayMAC != nil }.map(\.destinationIP)
+    }
+
     private struct Route {
         let isDefault: Bool
         let destinationIP: UInt32
@@ -19,26 +23,22 @@ extension Discovery {
     }
 
     private static func ipv4Routes() -> [Route] {
-        var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_DUMP, 0]
-        var length = 0
-        guard sysctl(&mib, UInt32(mib.count), nil, &length, nil, 0) == 0 else { return [] }
-        var buffer = [UInt8](repeating: 0, count: length)
-        guard sysctl(&mib, UInt32(mib.count), &buffer, &length, nil, 0) == 0 else { return [] }
-
-        return buffer.prefix(length).withUnsafeBytes { raw in
+        routingTable().withUnsafeBytes { table in
             var routes: [Route] = []
+            let headerSize = MemoryLayout<rt_msghdr>.size
             var offset = 0
-            while offset + MemoryLayout<rt_msghdr>.size <= raw.count {
-                let header = raw.baseAddress!.advanced(by: offset).assumingMemoryBound(to: rt_msghdr.self)
-                let messageLength = Int(header.pointee.rtm_msglen)
-                guard messageLength > 0 else { break }
-                defer { offset += messageLength }
+            while offset + headerSize <= table.count {
+                let header = table.loadUnaligned(fromByteOffset: offset, as: rt_msghdr.self)
+                let messageLength = Int(header.rtm_msglen)
+                guard messageLength >= headerSize, offset + messageLength <= table.count else { break }
+                let message = UnsafeRawBufferPointer(rebasing: table[offset..<(offset + messageLength)])
+                offset += messageLength
 
-                let addresses = socketAddresses(following: header)
+                let addresses = socketAddresses(in: message, present: header.rtm_addrs)
                 guard let destination = addresses[RTAX_DST].flatMap(ipv4) else { continue }
                 let gateway = addresses[RTAX_GATEWAY]
                 routes.append(Route(
-                    isDefault: destination == 0 && header.pointee.rtm_flags & RTF_GATEWAY != 0,
+                    isDefault: destination == 0 && header.rtm_flags & RTF_GATEWAY != 0,
                     destinationIP: destination,
                     gatewayIP: gateway.flatMap(ipv4),
                     gatewayMAC: gateway.flatMap(macAddress)
@@ -48,37 +48,58 @@ extension Discovery {
         }
     }
 
-    // Each sockaddr after the header is padded to a 4-byte boundary (ROUNDUP in net/route.h).
-    private static func socketAddresses(following header: UnsafePointer<rt_msghdr>) -> [Int32: UnsafePointer<sockaddr>] {
-        var addresses: [Int32: UnsafePointer<sockaddr>] = [:]
-        var cursor = UnsafeRawPointer(header).advanced(by: MemoryLayout<rt_msghdr>.size)
-        for index in 0..<RTAX_MAX where header.pointee.rtm_addrs & (1 << index) != 0 {
-            let address = cursor.assumingMemoryBound(to: sockaddr.self)
-            addresses[index] = address
-            let length = Int(address.pointee.sa_len)
-            cursor = cursor.advanced(by: length > 0 ? 1 + ((length - 1) | 3) : 4)
+    // The table can grow between sizing it and reading it, which fails with ENOMEM.
+    private static func routingTable() -> [UInt8] {
+        var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_DUMP, 0]
+        for _ in 0..<3 {
+            var length = 0
+            guard sysctl(&mib, UInt32(mib.count), nil, &length, nil, 0) == 0 else { return [] }
+            var buffer = [UInt8](repeating: 0, count: length)
+            if sysctl(&mib, UInt32(mib.count), &buffer, &length, nil, 0) == 0 {
+                return Array(buffer.prefix(length))
+            }
+            guard errno == ENOMEM else { return [] }
+        }
+        return []
+    }
+
+    private static func socketAddresses(
+        in message: UnsafeRawBufferPointer,
+        present: Int32
+    ) -> [Int32: UnsafeRawBufferPointer] {
+        var addresses: [Int32: UnsafeRawBufferPointer] = [:]
+        var cursor = MemoryLayout<rt_msghdr>.size
+        for index in 0..<RTAX_MAX where present & (1 << index) != 0 {
+            guard cursor < message.count else { break }
+            let length = Int(message[cursor])
+            let end = min(cursor + length, message.count)
+            addresses[index] = UnsafeRawBufferPointer(rebasing: message[cursor..<end])
+            cursor += roundedUpToFourBytes(length)
         }
         return addresses
     }
 
-    private static func ipv4(_ address: UnsafePointer<sockaddr>) -> UInt32? {
-        guard address.pointee.sa_family == AF_INET else { return nil }
-        return address.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-            UInt32(bigEndian: $0.pointee.sin_addr.s_addr)
-        }
+    private static func roundedUpToFourBytes(_ length: Int) -> Int {
+        length > 0 ? 1 + ((length - 1) | 3) : 4
     }
 
-    private static func macAddress(_ address: UnsafePointer<sockaddr>) -> String? {
-        guard address.pointee.sa_family == AF_LINK else { return nil }
-        return address.withMemoryRebound(to: sockaddr_dl.self, capacity: 1) { link in
-            guard link.pointee.sdl_alen == 6,
-                  let dataOffset = MemoryLayout<sockaddr_dl>.offset(of: \.sdl_data)
-            else { return nil }
-            let bytes = UnsafeRawPointer(link).advanced(by: dataOffset + Int(link.pointee.sdl_nlen))
-            return (0..<6).map { index in
-                let hex = String(bytes.load(fromByteOffset: index, as: UInt8.self), radix: 16)
-                return hex.count == 1 ? "0" + hex : hex
-            }.joined(separator: ":")
-        }
+    private static func ipv4(_ address: UnsafeRawBufferPointer) -> UInt32? {
+        let familyOffset = MemoryLayout<sockaddr_in>.offset(of: \.sin_family)!
+        let addressOffset = MemoryLayout<sockaddr_in>.offset(of: \.sin_addr)!
+        guard address.count >= addressOffset + 4,
+              address[familyOffset] == AF_INET
+        else { return nil }
+        return UInt32(bigEndian: address.loadUnaligned(fromByteOffset: addressOffset, as: UInt32.self))
+    }
+
+    private static func macAddress(_ address: UnsafeRawBufferPointer) -> String? {
+        let dataOffset = MemoryLayout<sockaddr_dl>.offset(of: \.sdl_data)!
+        guard address.count >= dataOffset,
+              address[MemoryLayout<sockaddr_dl>.offset(of: \.sdl_family)!] == AF_LINK,
+              address[MemoryLayout<sockaddr_dl>.offset(of: \.sdl_alen)!] == 6
+        else { return nil }
+        let start = dataOffset + Int(address[MemoryLayout<sockaddr_dl>.offset(of: \.sdl_nlen)!])
+        guard address.count >= start + 6 else { return nil }
+        return address[start..<(start + 6)].map { String(format: "%02x", $0) }.joined(separator: ":")
     }
 }
