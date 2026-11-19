@@ -5,7 +5,7 @@ import Foundation
 /// Strategy: fire ZoneGroupTopology directly at all ARP-cache hosts concurrently —
 /// one HTTP round trip finds AND enumerates the whole household.
 /// Fallback: full subnet scan using the real netmask (handles /22, /23, /24, …),
-/// which runs automatically only on the home subnet.
+/// which runs only on a home network: one whose router or subnet has had speakers before.
 enum Discovery {
 
     enum Trigger {
@@ -15,6 +15,7 @@ enum Discovery {
     }
 
     private static let cacheKey = "sonosaur.knownHosts"
+    private static let routersKey = "sonosaur.knownRouters"
     private static let zonePath = "/ZoneGroupTopology/Control"
     private static let zoneService = "urn:schemas-upnp-org:service:ZoneGroupTopology:1"
 
@@ -23,30 +24,42 @@ enum Discovery {
     static func discover(trigger: Trigger) async -> [SonosDevice] {
         // Cached IPs first — cheapest.
         if let devices = await firstTopology(in: cachedHosts()), !devices.isEmpty {
-            saveHosts(devices.map(\.host))
+            remember(devices)
             return devices
         }
         // ARP cache — all recently-seen LAN hosts, no network permission required to read.
         if let devices = await firstTopology(in: hostsFromArpCache()), !devices.isEmpty {
-            saveHosts(devices.map(\.host))
+            remember(devices)
             return devices
         }
         // Full subnet scan fallback.
         guard let subnet = localSubnet(),
-              shouldScan(subnet, knownHosts: cachedHosts(), trigger: trigger)
+              shouldScan(
+                  subnet,
+                  router: gatewayMAC(in: subnet),
+                  knownHosts: cachedHosts(),
+                  knownRouters: knownRouters(),
+                  trigger: trigger
+              )
         else {
             return []
         }
         if let devices = await firstTopology(in: subnet.hosts), !devices.isEmpty {
-            saveHosts(devices.map(\.host))
+            remember(devices)
             return devices
         }
         return []
     }
 
     // Away from home, sweeping a big office subnet pins the CPU inside CFNetwork for hours.
-    private static func shouldScan(_ subnet: Subnet, knownHosts: [String], trigger: Trigger) -> Bool {
-        let isHome = knownHosts.contains(where: subnet.contains)
+    private static func shouldScan(
+        _ subnet: Subnet,
+        router: String?,
+        knownHosts: [String],
+        knownRouters: [String],
+        trigger: Trigger
+    ) -> Bool {
+        let isHome = router.map(knownRouters.contains) == true || knownHosts.contains(where: subnet.contains)
         switch trigger {
         case .launch, .userRefresh: return isHome || knownHosts.isEmpty
         case .background: return isHome
@@ -120,7 +133,7 @@ enum Discovery {
 
     // MARK: - Subnet scan (fallback)
 
-    private struct Subnet {
+    struct Subnet {
         let network: UInt32
         let mask: UInt32
 
@@ -129,8 +142,12 @@ enum Discovery {
             return ((network + 1)..<broadcast).map { uint32ToIP($0) }
         }
 
+        func contains(_ ip: UInt32) -> Bool {
+            ip & mask == network
+        }
+
         func contains(_ ip: String) -> Bool {
-            ipToUInt32(ip).map { $0 & mask == network } ?? false
+            ipToUInt32(ip).map(contains) ?? false
         }
     }
 
@@ -227,5 +244,19 @@ enum Discovery {
 
     static func saveHosts(_ hosts: [String]) {
         UserDefaults.standard.set(hosts, forKey: cacheKey)
+    }
+
+    static func knownRouters() -> [String] {
+        UserDefaults.standard.stringArray(forKey: routersKey) ?? []
+    }
+
+    private static func remember(_ devices: [SonosDevice]) {
+        saveHosts(devices.map(\.host))
+        guard let subnet = localSubnet(),
+              devices.contains(where: { subnet.contains($0.host) }),
+              let router = gatewayMAC(in: subnet),
+              !knownRouters().contains(router)
+        else { return }
+        UserDefaults.standard.set(knownRouters() + [router], forKey: routersKey)
     }
 }
