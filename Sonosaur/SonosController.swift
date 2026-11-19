@@ -20,7 +20,7 @@ final class SonosController: ObservableObject {
 
     /// Discovers devices immediately, then silently re-discovers every 5 minutes.
     private func startBackgroundLoop() async {
-        await refresh()
+        await refresh(trigger: .launch)
         while true {
             // Sleep off-actor so the main actor isn't tied up.
             try? await Task.sleep(for: .seconds(300))
@@ -31,10 +31,10 @@ final class SonosController: ObservableObject {
     // MARK: - Discovery
 
     /// Full refresh with loading state — used on first launch and manual Refresh button.
-    func refresh() async {
+    func refresh(trigger: Discovery.Trigger) async {
         isLoading = true
         errorMessage = nil
-        let found = await Discovery.discover()
+        let found = await Discovery.discover(trigger: trigger)
         if found.isEmpty {
             errorMessage = "No Sonos devices found on this network."
             isLoading = false
@@ -46,7 +46,7 @@ final class SonosController: ObservableObject {
 
     /// Background re-discovery — updates volumes/device list without disrupting the UI.
     private func silentRefresh() async {
-        let found = await Discovery.discover()
+        let found = await Discovery.discover(trigger: .background)
         guard !found.isEmpty else { return }
         await applyDiscoveredDevices(found)
     }

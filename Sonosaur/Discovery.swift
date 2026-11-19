@@ -4,8 +4,15 @@ import Foundation
 ///
 /// Strategy: fire ZoneGroupTopology directly at all ARP-cache hosts concurrently —
 /// one HTTP round trip finds AND enumerates the whole household.
-/// Fallback: full subnet scan using the real netmask (handles /22, /23, /24, …).
+/// Fallback: full subnet scan using the real netmask (handles /22, /23, /24, …),
+/// which runs automatically only on the home subnet.
 enum Discovery {
+
+    enum Trigger {
+        case launch
+        case background
+        case userRefresh
+    }
 
     private static let cacheKey = "sonosaur.knownHosts"
     private static let zonePath = "/ZoneGroupTopology/Control"
@@ -13,7 +20,7 @@ enum Discovery {
 
     // MARK: - Entry point
 
-    static func discover() async -> [SonosDevice] {
+    static func discover(trigger: Trigger) async -> [SonosDevice] {
         // Cached IPs first — cheapest.
         if let devices = await firstTopology(in: cachedHosts()), !devices.isEmpty {
             saveHosts(devices.map(\.host))
@@ -25,7 +32,9 @@ enum Discovery {
             return devices
         }
         // Full subnet scan fallback.
-        guard let subnet = localSubnet(), shouldScan(subnet, knownHosts: cachedHosts()) else {
+        guard let subnet = localSubnet(),
+              shouldScan(subnet, knownHosts: cachedHosts(), trigger: trigger)
+        else {
             return []
         }
         if let devices = await firstTopology(in: subnet.hosts), !devices.isEmpty {
@@ -36,8 +45,13 @@ enum Discovery {
     }
 
     // Away from home, sweeping a big office subnet pins the CPU inside CFNetwork for hours.
-    private static func shouldScan(_ subnet: Subnet, knownHosts: [String]) -> Bool {
-        knownHosts.isEmpty || knownHosts.contains(where: subnet.contains)
+    private static func shouldScan(_ subnet: Subnet, knownHosts: [String], trigger: Trigger) -> Bool {
+        let isHome = knownHosts.contains(where: subnet.contains)
+        switch trigger {
+        case .userRefresh: return true
+        case .launch: return isHome || knownHosts.isEmpty
+        case .background: return isHome
+        }
     }
 
     // MARK: - Concurrent topology probe

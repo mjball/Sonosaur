@@ -65,7 +65,7 @@ struct MenuContent: View {
     private var footer: some View {
         HStack {
             Button("Refresh") {
-                Task { await controller.refresh() }
+                Task { await controller.refresh(trigger: .userRefresh) }
             }
             .disabled(controller.isLoading)
 
