@@ -25,11 +25,19 @@ enum Discovery {
             return devices
         }
         // Full subnet scan fallback.
-        if let devices = await firstTopology(in: subnetHostList()), !devices.isEmpty {
+        guard let subnet = localSubnet(), shouldScan(subnet, knownHosts: cachedHosts()) else {
+            return []
+        }
+        if let devices = await firstTopology(in: subnet.hosts), !devices.isEmpty {
             saveHosts(devices.map(\.host))
             return devices
         }
         return []
+    }
+
+    // Away from home, sweeping a big office subnet pins the CPU inside CFNetwork for hours.
+    private static func shouldScan(_ subnet: Subnet, knownHosts: [String]) -> Bool {
+        knownHosts.isEmpty || knownHosts.contains(where: subnet.contains)
     }
 
     // MARK: - Concurrent topology probe
@@ -99,9 +107,23 @@ enum Discovery {
 
     // MARK: - Subnet scan (fallback)
 
-    private static func subnetHostList() -> [String] {
+    private struct Subnet {
+        let network: UInt32
+        let mask: UInt32
+
+        var hosts: [String] {
+            let broadcast = network | ~mask
+            return ((network + 1)..<broadcast).map { uint32ToIP($0) }
+        }
+
+        func contains(_ ip: String) -> Bool {
+            ipToUInt32(ip).map { $0 & mask == network } ?? false
+        }
+    }
+
+    private static func localSubnet() -> Subnet? {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0 else { return [] }
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
         defer { freeifaddrs(ifaddr) }
         var ptr = ifaddr
         while let curr = ptr {
@@ -132,11 +154,9 @@ enum Discovery {
                   let maskInt = ipToUInt32(maskStr), maskInt != 0
             else { continue }
 
-            let network = ipInt & maskInt
-            let broadcast = network | ~maskInt
-            return ((network + 1)..<broadcast).map { uint32ToIP($0) }
+            return Subnet(network: ipInt & maskInt, mask: maskInt)
         }
-        return []
+        return nil
     }
 
     // MARK: - XML parsing
