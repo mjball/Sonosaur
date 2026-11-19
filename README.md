@@ -32,7 +32,7 @@ xattr -cr /Applications/Sonosaur.app && open /Applications/Sonosaur.app
 ## How it works
 
 - **Discovery**: reads the kernel ARP table (via `sysctl`) to get all recently-seen LAN hosts, fires `ZoneGroupTopology` at them concurrently — finds and enumerates the whole household in one round trip. Caches IPs in `UserDefaults` so relaunch is instant.
-- **Home networks only**: the full subnet sweep runs only on networks whose router (or exact subnet) has had speakers before, so it stays quiet at the office or a hotel.
+- **Home networks only**: the full subnet sweep runs only on networks whose router (or exact subnet) has had speakers before, or, before any speakers have been found, on networks of 1,022 addresses or fewer. It stays quiet at the office or a hotel.
 - **No SSDP**: avoids multicast (requires an Apple provisioning entitlement). Pure unicast.
 - **Volume control**: `RenderingControl#SetVolume` SOAP call to port 1400 on each device, debounced during slider drags.
 - **Background refresh**: re-discovers devices every 5 minutes silently.

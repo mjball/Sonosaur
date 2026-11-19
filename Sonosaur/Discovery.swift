@@ -4,8 +4,7 @@ import Foundation
 ///
 /// Strategy: fire ZoneGroupTopology directly at all ARP-cache hosts concurrently —
 /// one HTTP round trip finds AND enumerates the whole household.
-/// Fallback: full subnet scan using the real netmask (handles /22, /23, /24, …),
-/// which runs only on a network whose router or subnet has had speakers before.
+/// Fallback: full subnet scan using the real netmask (handles /22, /23, /24, …).
 enum Discovery {
 
     enum Trigger {
