@@ -34,7 +34,7 @@ final class SonosController: ObservableObject {
     func refresh() async {
         isLoading = true
         errorMessage = nil
-        let found = await Discovery.discover()
+        let found = await Discovery.discover(trigger: .foreground)
         if found.isEmpty {
             errorMessage = "No Sonos devices found on this network."
             isLoading = false
@@ -46,7 +46,7 @@ final class SonosController: ObservableObject {
 
     /// Background re-discovery — updates volumes/device list without disrupting the UI.
     private func silentRefresh() async {
-        let found = await Discovery.discover()
+        let found = await Discovery.discover(trigger: .background)
         guard !found.isEmpty else { return }
         await applyDiscoveredDevices(found)
     }

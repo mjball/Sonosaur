@@ -7,29 +7,60 @@ import Foundation
 /// Fallback: full subnet scan using the real netmask (handles /22, /23, /24, …).
 enum Discovery {
 
+    enum Trigger {
+        case foreground
+        case background
+    }
+
+    struct HomeNetworks: Codable {
+        var routers: [String] = []
+        var subnets: [Subnet] = []
+    }
+
     private static let cacheKey = "sonosaur.knownHosts"
+    private static let homeNetworksKey = "sonosaur.homeNetworks"
+    private static let largestFirstRunSubnetMask: UInt32 = 0xFFFF_FC00
     private static let zonePath = "/ZoneGroupTopology/Control"
     private static let zoneService = "urn:schemas-upnp-org:service:ZoneGroupTopology:1"
 
     // MARK: - Entry point
 
-    static func discover() async -> [SonosDevice] {
+    static func discover(trigger: Trigger) async -> [SonosDevice] {
         // Cached IPs first — cheapest.
         if let devices = await firstTopology(in: cachedHosts()), !devices.isEmpty {
-            saveHosts(devices.map(\.host))
+            remember(devices)
             return devices
         }
         // ARP cache — all recently-seen LAN hosts, no network permission required to read.
         if let devices = await firstTopology(in: hostsFromArpCache()), !devices.isEmpty {
-            saveHosts(devices.map(\.host))
+            remember(devices)
             return devices
         }
         // Full subnet scan fallback.
-        if let devices = await firstTopology(in: subnetHostList()), !devices.isEmpty {
-            saveHosts(devices.map(\.host))
+        guard let subnet = localSubnet(),
+              shouldScan(subnet, router: gatewayMAC(in: subnet), home: homeNetworks(), trigger: trigger)
+        else {
+            return []
+        }
+        if let devices = await firstTopology(in: subnet.hosts), !devices.isEmpty {
+            remember(devices)
             return devices
         }
         return []
+    }
+
+    // Away from home, sweeping a big office subnet pins the CPU inside CFNetwork for hours.
+    static func shouldScan(_ subnet: Subnet, router: String?, home: HomeNetworks, trigger: Trigger) -> Bool {
+        let isHomeRouter = router.map(home.routers.contains) == true
+        switch trigger {
+        case .background:
+            return isHomeRouter
+        case .foreground:
+            let isFirstRun = home.routers.isEmpty && home.subnets.isEmpty
+            return isHomeRouter
+                || home.subnets.contains(subnet)
+                || (isFirstRun && subnet.mask >= largestFirstRunSubnetMask)
+        }
     }
 
     // MARK: - Concurrent topology probe
@@ -78,30 +109,37 @@ enum Discovery {
 
     /// Reads all LAN IPs from the kernel ARP table (no network connection needed).
     private static func hostsFromArpCache() -> [String] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/arp")
-        process.arguments = ["-a"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        guard (try? process.run()) != nil else { return [] }
-        process.waitUntilExit()
-        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        let pattern = #"\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let ns = NSRange(output.startIndex..., in: output)
-        return regex.matches(in: output, range: ns).compactMap { match in
-            guard let r = Range(match.range(at: 1), in: output) else { return nil }
-            let ip = String(output[r])
-            return (ip == "127.0.0.1" || ip.hasPrefix("169.254")) ? nil : ip
-        }
+        let loopback = Subnet(network: 0x7F00_0000, mask: 0xFF00_0000)
+        let linkLocal = Subnet(network: 0xA9FE_0000, mask: 0xFFFF_0000)
+        return arpTableIPs()
+            .filter { !loopback.contains($0) && !linkLocal.contains($0) }
+            .map(uint32ToIP)
     }
 
     // MARK: - Subnet scan (fallback)
 
-    private static func subnetHostList() -> [String] {
+    struct Subnet: Codable, Hashable {
+        let network: UInt32
+        let mask: UInt32
+
+        var hosts: [String] {
+            let broadcast = network | ~mask
+            guard mask < 0xFFFF_FFFE else { return [] }
+            return ((network + 1)..<broadcast).map { uint32ToIP($0) }
+        }
+
+        func contains(_ ip: UInt32) -> Bool {
+            ip & mask == network
+        }
+
+        func contains(_ ip: String) -> Bool {
+            ipToUInt32(ip).map(contains) ?? false
+        }
+    }
+
+    private static func localSubnet() -> Subnet? {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0 else { return [] }
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
         defer { freeifaddrs(ifaddr) }
         var ptr = ifaddr
         while let curr = ptr {
@@ -132,11 +170,9 @@ enum Discovery {
                   let maskInt = ipToUInt32(maskStr), maskInt != 0
             else { continue }
 
-            let network = ipInt & maskInt
-            let broadcast = network | ~maskInt
-            return ((network + 1)..<broadcast).map { uint32ToIP($0) }
+            return Subnet(network: ipInt & maskInt, mask: maskInt)
         }
-        return []
+        return nil
     }
 
     // MARK: - XML parsing
@@ -194,5 +230,23 @@ enum Discovery {
 
     static func saveHosts(_ hosts: [String]) {
         UserDefaults.standard.set(hosts, forKey: cacheKey)
+    }
+
+    static func homeNetworks() -> HomeNetworks {
+        UserDefaults.standard.data(forKey: homeNetworksKey)
+            .flatMap { try? JSONDecoder().decode(HomeNetworks.self, from: $0) } ?? HomeNetworks()
+    }
+
+    private static func remember(_ devices: [SonosDevice]) {
+        saveHosts(devices.map(\.host))
+        guard let subnet = localSubnet(), devices.contains(where: { subnet.contains($0.host) }) else { return }
+        var home = homeNetworks()
+        if let router = gatewayMAC(in: subnet), !home.routers.contains(router) {
+            home.routers.append(router)
+        }
+        if !home.subnets.contains(subnet) {
+            home.subnets.append(subnet)
+        }
+        UserDefaults.standard.set(try? JSONEncoder().encode(home), forKey: homeNetworksKey)
     }
 }
