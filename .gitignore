@@ -20,3 +20,6 @@ xcuserdata/
 # Secrets / credentials
 *.p12
 *.mobileprovision
+
+# Release artifact from Scripts/build-release.sh
+Sonosaur.app.zip

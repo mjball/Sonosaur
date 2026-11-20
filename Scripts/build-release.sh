@@ -41,13 +41,10 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   build | grep -E '^(Build|error:|warning:|.*\.swift:[0-9]+)' | grep -v 'appintents' || true
 
-echo "==> Locating built app"
-BUILT_APP=$(find "$APP_BUILD_DIR" -name "Sonosaur.app" -not -path "*/DerivedData/*" | head -1)
-if [[ -z "$BUILT_APP" ]]; then
-  BUILT_APP=$(find "$APP_BUILD_DIR/DerivedData" -name "Sonosaur.app" | head -1)
+if [[ ! -d "$APP_PATH" ]]; then
+  echo "error: build did not produce $APP_PATH"
+  exit 1
 fi
-echo "    Found: $BUILT_APP"
-cp -R "$BUILT_APP" "$APP_PATH"
 
 if [[ -n "$RELEASE_VERSION" ]]; then
   echo "==> Stamping version $RELEASE_VERSION"
